@@ -10,8 +10,10 @@ import { setPreferredTranslationAction, toggleChapterProgressAction } from "@/fe
 import { getBooks } from "@/features/reading/queries";
 import { TranslationPicker } from "@/features/reading/translation-picker";
 import { resolvePreferredTranslation } from "@/features/reading/translations";
+import { ThemeToggle } from "@/features/theme/theme-toggle";
 import { getTodayExperience } from "@/features/plans/queries";
 import { DailyMessageCard } from "@/features/share/daily-message-card";
+import { InstallAppCard } from "@/features/share/install-app-card";
 import { db } from "@/lib/db/knex";
 import { translateUserRole } from "@/lib/labels";
 
@@ -71,7 +73,7 @@ export default async function TodayPage() {
   return (
     <main className="page-container grid-gap">
       <header style={{ display: "grid", gap: "0.5rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "start" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "start", flexWrap: "wrap" }}>
           <div>
             <p className="muted" style={{ margin: 0 }}>
               Hoje
@@ -83,9 +85,14 @@ export default async function TodayPage() {
               {today.template.name} • Dia {today.dayNumber}
             </p>
           </div>
-          <span className="chip chip-accent">{translateUserRole(session?.user?.role ?? "guest")}</span>
+          <div style={{ display: "grid", gap: "0.75rem", justifyItems: "end" }}>
+            <span className="chip chip-accent">{translateUserRole(session?.user?.role ?? "guest")}</span>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
+
+      <InstallAppCard compact />
 
       {session?.user?.id && !preferences.onboardingCompleted && (
         <section className="card-muted" style={{ display: "grid", gap: "0.75rem" }}>

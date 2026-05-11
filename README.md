@@ -13,7 +13,7 @@ Webapp bíblico em Next.js focado em leitura diária, progresso, notas por capí
 
 ## Rodando localmente
 1. Copie `.env.example` para `.env`
-2. Ajuste `DATABASE_URL`, `AUTH_SECRET` e `ADMIN_EMAIL`
+2. Ajuste a conexão do banco usando `DATABASE_URL` ou `DB_HOST`/`DB_PORT`/`DB_DATABASE`/`DB_USER`/`DB_PASSWORD`, além de `AUTH_SECRET` e `ADMIN_EMAIL`
 3. Instale dependências: `pnpm install`
 4. Rode migrations e seed:
    - `pnpm db:migrate`

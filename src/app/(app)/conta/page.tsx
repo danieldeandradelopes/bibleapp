@@ -15,6 +15,7 @@ import { setPreferredTranslationAction } from "@/features/reading/actions";
 import { TranslationPicker } from "@/features/reading/translation-picker";
 import { resolvePreferredTranslation } from "@/features/reading/translations";
 import { InstallAppCard } from "@/features/share/install-app-card";
+import { ThemeToggle } from "@/features/theme/theme-toggle";
 import { translateUserRole } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -154,6 +155,14 @@ export default async function AccountPage() {
               </form>
             </section>
           )}
+
+          <section className="card" style={{ display: "grid", gap: "0.75rem" }}>
+            <strong>Tema</strong>
+            <p className="muted" style={{ margin: 0 }}>
+              Altere rapidamente entre leitura clara e escura conforme o ambiente.
+            </p>
+            <ThemeToggle />
+          </section>
 
           <section className="card" style={{ display: "grid", gap: "0.75rem" }}>
             <strong>PWA e experiência</strong>

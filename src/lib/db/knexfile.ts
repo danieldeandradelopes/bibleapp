@@ -57,7 +57,7 @@ const config: Record<string, Knex.Config> = {
     ...baseConfig,
     pool: {
       min: env.DATABASE_POOL_MIN,
-      max: Math.max(env.DATABASE_POOL_MAX, 20),
+      max: env.DATABASE_POOL_MAX,
     },
   },
 };

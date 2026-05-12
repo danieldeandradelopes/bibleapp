@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { getStoredUserPreferences } from "@/features/account/preferences";
 import { db } from "@/lib/db/knex";
@@ -13,7 +14,7 @@ export type ActiveTranslation = {
   name: string;
 };
 
-export async function getActiveTranslations(): Promise<ActiveTranslation[]> {
+export const getActiveTranslations = cache(async function getActiveTranslations(): Promise<ActiveTranslation[]> {
   const rows = await db("translations")
     .select("id", "code", "name")
     .where({ is_active: true })
@@ -30,9 +31,11 @@ export async function getActiveTranslations(): Promise<ActiveTranslation[]> {
     if (right.code === env.DEFAULT_TRANSLATION_CODE) return 1;
     return left.name.localeCompare(right.name, "pt-BR");
   });
-}
+});
 
-export async function resolvePreferredTranslation(userId?: string | null): Promise<{
+export const resolvePreferredTranslation = cache(async function resolvePreferredTranslation(
+  userId?: string | null,
+): Promise<{
   current: ActiveTranslation | null;
   translations: ActiveTranslation[];
 }> {
@@ -51,4 +54,4 @@ export async function resolvePreferredTranslation(userId?: string | null): Promi
     null;
 
   return { current, translations };
-}
+});

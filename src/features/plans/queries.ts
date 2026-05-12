@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { formatDailyMessage, formatReferenceLabel } from "@/features/share/format-message";
 import { db } from "@/lib/db/knex";
 
@@ -129,7 +130,11 @@ async function getFallbackTemplate() {
     }>();
 }
 
-export async function getTodayExperience(userId?: string | null, date = new Date()): Promise<TodayExperience | null> {
+const getTodayExperienceCached = cache(async function getTodayExperienceCached(
+  userId: string | null | undefined,
+  isoDate: string,
+): Promise<TodayExperience | null> {
+  const date = new Date(`${isoDate}T00:00:00.000Z`);
   const userPlan = await getActivePlan(userId);
 
   const template =
@@ -228,6 +233,13 @@ export async function getTodayExperience(userId?: string | null, date = new Date
     ),
     readings,
   };
+});
+
+export async function getTodayExperience(
+  userId?: string | null,
+  date = new Date(),
+): Promise<TodayExperience | null> {
+  return getTodayExperienceCached(userId, date.toISOString().slice(0, 10));
 }
 
 export async function upsertDailyMessage(userId: string, experience: TodayExperience, date = new Date()) {

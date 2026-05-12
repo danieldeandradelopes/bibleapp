@@ -1,30 +1,45 @@
 import "server-only";
 
+import { cache } from "react";
 import { getStoredUserPreferences } from "@/features/account/preferences";
 import { resolvePreferredTranslation } from "@/features/reading/translations";
 import { db } from "@/lib/db/knex";
 
-export async function getBooks(userId?: string | null) {
-  const progressRows = userId
-    ? await db("reading_progress as rp")
-        .join("chapters as c", "c.id", "rp.chapter_id")
-        .select("c.book_id")
-        .count<{ book_id: number; total: string }[]>("rp.id as total")
-        .where("rp.user_id", userId)
-        .groupBy("c.book_id")
-    : [];
+const getCanonicalBooks = cache(async () => {
+  return db("books")
+    .select("id", "slug", "name", "abbreviation", "testament", "canonical_order")
+    .orderBy("canonical_order", "asc");
+});
 
-  const progressMap = new Map(progressRows.map((row) => [Number(row.book_id), Number(row.total)]));
-
+const getChapterCountMap = cache(async () => {
   const chapterCounts = await db("chapters")
     .select("book_id")
     .count<{ book_id: number; total: string }[]>("id as total")
     .groupBy("book_id");
-  const chapterCountMap = new Map(chapterCounts.map((row) => [Number(row.book_id), Number(row.total)]));
 
-  const books = await db("books")
-    .select("id", "slug", "name", "abbreviation", "testament", "canonical_order")
-    .orderBy("canonical_order", "asc");
+  return new Map(chapterCounts.map((row) => [Number(row.book_id), Number(row.total)]));
+});
+
+const getTotalChapterCount = cache(async () => {
+  const row = await db("chapters").count<{ total: string }[]>("id as total").first();
+  return Number(row?.total ?? 0);
+});
+
+export async function getBooks(userId?: string | null) {
+  const [progressRows, chapterCountMap, books] = await Promise.all([
+    userId
+      ? db("reading_progress as rp")
+          .join("chapters as c", "c.id", "rp.chapter_id")
+          .select("c.book_id")
+          .count<{ book_id: number; total: string }[]>("rp.id as total")
+          .where("rp.user_id", userId)
+          .groupBy("c.book_id")
+      : Promise.resolve([]),
+    getChapterCountMap(),
+    getCanonicalBooks(),
+  ]);
+
+  const progressMap = new Map(progressRows.map((row) => [Number(row.book_id), Number(row.total)]));
 
   return books.map((book) => ({
     id: Number(book.id),
@@ -35,6 +50,25 @@ export async function getBooks(userId?: string | null) {
     totalChapters: chapterCountMap.get(Number(book.id)) ?? 0,
     completedChapters: progressMap.get(Number(book.id)) ?? 0,
   }));
+}
+
+export async function getOverallProgress(userId?: string | null) {
+  if (!userId) {
+    return {
+      completedChapters: 0,
+      totalChapters: await getTotalChapterCount(),
+    };
+  }
+
+  const [completedRow, totalChapters] = await Promise.all([
+    db("reading_progress").where({ user_id: userId }).count<{ total: string }[]>("id as total").first(),
+    getTotalChapterCount(),
+  ]);
+
+  return {
+    completedChapters: Number(completedRow?.total ?? 0),
+    totalChapters,
+  };
 }
 
 export async function getBookWithChapters(bookSlug: string, userId?: string | null) {
@@ -88,76 +122,94 @@ export async function getChapterPageData(
     getStoredUserPreferences(userId),
   ]);
 
-  const book = await db("books")
-    .select("id", "slug", "name", "canonical_order")
-    .where({ slug: bookSlug })
-    .first<{ id: number; slug: string; name: string; canonical_order: number }>();
-
-  if (!book) return null;
-
-  const chapter = await db("chapters")
-    .select("id", "chapter_number")
-    .where({ book_id: book.id, chapter_number: chapterNumber })
-    .first<{ id: number; chapter_number: number }>();
-
-  if (!chapter) return null;
-
-  const verses = await db("verses as v")
-    .leftJoin("verse_texts as vt", function joinText() {
-      this.on("vt.verse_id", "=", "v.id");
-      if (currentTranslation?.id) {
-        this.andOn("vt.translation_id", "=", db.raw("?", [currentTranslation.id]));
-      }
-    })
-    .select("v.id", "v.verse_number", "vt.text")
-    .where("v.chapter_id", chapter.id)
-    .orderBy("v.verse_number", "asc");
-
-  const note = userId
-    ? await db("chapter_notes")
-        .select("content")
-        .where({ user_id: userId, chapter_id: chapter.id })
-        .first<{ content: string }>()
-    : null;
-
-  const completed = userId
-    ? await db("reading_progress").where({ user_id: userId, chapter_id: chapter.id }).first("id")
-    : null;
-
-  const chapterContext = await db("chapter_contexts")
+  const chapterRow = await db("chapters as c")
+    .join("books as b", "b.id", "c.book_id")
     .select(
-      "summary",
-      "author",
-      "historical_period",
-      "audience",
-      "purpose",
-      "curiosities",
-      "source_label",
+      "b.id as book_id",
+      "b.slug as book_slug",
+      "b.name as book_name",
+      "b.canonical_order",
+      "c.id as chapter_id",
+      "c.chapter_number",
     )
-    .where({ chapter_id: chapter.id })
+    .where("b.slug", bookSlug)
+    .andWhere("c.chapter_number", chapterNumber)
     .first<{
-      summary: string;
-      author: string | null;
-      historical_period: string | null;
-      audience: string | null;
-      purpose: string | null;
-      curiosities: string | null;
-      source_label: string | null;
+      book_id: number;
+      book_slug: string;
+      book_name: string;
+      canonical_order: number;
+      chapter_id: number;
+      chapter_number: number;
     }>();
 
-  const previousChapter = await db("chapters")
-    .select("chapter_number")
-    .where({ book_id: book.id })
-    .andWhere("chapter_number", "<", chapter.chapter_number)
-    .orderBy("chapter_number", "desc")
-    .first<{ chapter_number: number }>();
+  if (!chapterRow) return null;
 
-  const nextChapter = await db("chapters")
-    .select("chapter_number")
-    .where({ book_id: book.id })
-    .andWhere("chapter_number", ">", chapter.chapter_number)
-    .orderBy("chapter_number", "asc")
-    .first<{ chapter_number: number }>();
+  const book = {
+    id: Number(chapterRow.book_id),
+    slug: String(chapterRow.book_slug),
+    name: String(chapterRow.book_name),
+    canonical_order: Number(chapterRow.canonical_order),
+  };
+
+  const chapter = {
+    id: Number(chapterRow.chapter_id),
+    chapter_number: Number(chapterRow.chapter_number),
+  };
+
+  const [verses, note, completed, chapterContext, previousChapter, nextChapter] = await Promise.all([
+    db("verses as v")
+      .leftJoin("verse_texts as vt", function joinText() {
+        this.on("vt.verse_id", "=", "v.id");
+        if (currentTranslation?.id) {
+          this.andOn("vt.translation_id", "=", db.raw("?", [currentTranslation.id]));
+        }
+      })
+      .select("v.id", "v.verse_number", "vt.text")
+      .where("v.chapter_id", chapter.id)
+      .orderBy("v.verse_number", "asc"),
+    userId
+      ? db("chapter_notes")
+          .select("content")
+          .where({ user_id: userId, chapter_id: chapter.id })
+          .first<{ content: string }>()
+      : Promise.resolve(null),
+    userId
+      ? db("reading_progress").where({ user_id: userId, chapter_id: chapter.id }).first("id")
+      : Promise.resolve(null),
+    db("chapter_contexts")
+      .select(
+        "summary",
+        "author",
+        "historical_period",
+        "audience",
+        "purpose",
+        "curiosities",
+        "source_label",
+      )
+      .where({ chapter_id: chapter.id })
+      .first<{
+        summary: string;
+        author: string | null;
+        historical_period: string | null;
+        audience: string | null;
+        purpose: string | null;
+        curiosities: string | null;
+        source_label: string | null;
+      }>(),
+    db("chapters")
+      .select("chapter_number")
+      .where({ book_id: book.id })
+      .andWhere("chapter_number", "<", chapter.chapter_number)
+      .orderBy("chapter_number", "desc")
+      .first<{ chapter_number: number }>(),
+    db("chapters")
+      .select("chapter_number")
+      .where({ book_id: book.id })
+      .andWhere("chapter_number", ">", chapter.chapter_number)
+      .orderBy("chapter_number", "asc")
+      .first<{ chapter_number: number }>(),
+  ]);
 
   const verseIds = verses.map((verse) => Number(verse.id));
   const verseAnnotations =

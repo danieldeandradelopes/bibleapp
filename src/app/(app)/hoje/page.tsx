@@ -7,7 +7,7 @@ import { canShareReadyMessage } from "@/features/auth/permissions";
 import { markSharedToGroupAction } from "@/features/groups/actions";
 import { getGroups } from "@/features/groups/queries";
 import { setPreferredTranslationAction, toggleChapterProgressAction } from "@/features/reading/actions";
-import { getBooks } from "@/features/reading/queries";
+import { getOverallProgress } from "@/features/reading/queries";
 import { TranslationPicker } from "@/features/reading/translation-picker";
 import { resolvePreferredTranslation } from "@/features/reading/translations";
 import { ThemeToggle } from "@/features/theme/theme-toggle";
@@ -39,10 +39,10 @@ export default async function TodayPage() {
   const session = await auth();
   const userId = session?.user?.id ?? null;
   const canShare = canShareReadyMessage(session?.user?.role);
-  const [today, groups, books, translationState, reminderSummary, preferences] = await Promise.all([
+  const [today, groups, progressSummary, translationState, reminderSummary, preferences] = await Promise.all([
     getTodayExperience(userId),
     getGroups(userId),
-    getBooks(userId),
+    getOverallProgress(userId),
     resolvePreferredTranslation(userId),
     getReminderSummary(userId),
     getStoredUserPreferences(userId),
@@ -56,18 +56,19 @@ export default async function TodayPage() {
     );
   }
 
-  const verseOfTheDay = await getVerseOfTheDay(today.readings[0]?.chapterIds ?? [], translationState.current?.id);
-  const completedChapters = books.reduce((sum, book) => sum + book.completedChapters, 0);
-  const totalChapters = books.reduce((sum, book) => sum + book.totalChapters, 0);
+  const { completedChapters, totalChapters } = progressSummary;
   const progressPercent = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
-  const sharedToday = userId
-    ? await db("group_share_logs as gsl")
-        .join("daily_messages as dm", "dm.id", "gsl.daily_message_id")
-        .select("gsl.group_id")
-        .where("gsl.user_id", userId)
-        .andWhere("dm.date", new Date().toISOString().slice(0, 10))
-    : [];
+  const [verseOfTheDay, sharedToday] = await Promise.all([
+    getVerseOfTheDay(today.readings[0]?.chapterIds ?? [], translationState.current?.id),
+    userId
+      ? db("group_share_logs as gsl")
+          .join("daily_messages as dm", "dm.id", "gsl.daily_message_id")
+          .select("gsl.group_id")
+          .where("gsl.user_id", userId)
+          .andWhere("dm.date", new Date().toISOString().slice(0, 10))
+      : Promise.resolve([]),
+  ]);
   const sharedGroupIds = new Set(sharedToday.map((row) => Number(row.group_id)));
 
   return (

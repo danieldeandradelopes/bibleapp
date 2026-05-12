@@ -1,15 +1,16 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db/knex";
 
-export async function getCurrentSession() {
+export const getCurrentSession = cache(async function getCurrentSession() {
   return auth();
-}
+});
 
-export async function getCurrentUserRecord() {
-  const session = await auth();
+export const getCurrentUserRecord = cache(async function getCurrentUserRecord() {
+  const session = await getCurrentSession();
   if (!session?.user?.id) return null;
 
   return db("users")
@@ -22,10 +23,10 @@ export async function getCurrentUserRecord() {
       role: "admin" | "user";
       created_at: Date;
     }>();
-}
+});
 
 export async function requireCurrentUserRecord(loginMessage?: string) {
-  const session = await auth();
+  const session = await getCurrentSession();
   if (!session?.user?.id) {
     redirect(`/login?error=${encodeURIComponent(loginMessage ?? "Faça login para continuar.")}`);
   }

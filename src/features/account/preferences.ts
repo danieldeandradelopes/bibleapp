@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { db } from "@/lib/db/knex";
 
 export type UserPreferences = {
@@ -18,7 +19,9 @@ export const defaultUserPreferences: UserPreferences = {
   onboardingCompleted: false,
 };
 
-export async function getStoredUserPreferences(userId?: string | null): Promise<UserPreferences> {
+export const getStoredUserPreferences = cache(async function getStoredUserPreferences(
+  userId?: string | null,
+): Promise<UserPreferences> {
   if (!userId) {
     return defaultUserPreferences;
   }
@@ -51,7 +54,7 @@ export async function getStoredUserPreferences(userId?: string | null): Promise<
     reminderTimezone: String(row.reminder_timezone ?? defaultUserPreferences.reminderTimezone),
     onboardingCompleted: Boolean(row.onboarding_completed),
   };
-}
+});
 
 export async function upsertUserPreferences(
   userId: string,

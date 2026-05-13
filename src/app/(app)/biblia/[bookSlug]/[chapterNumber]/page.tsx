@@ -7,7 +7,7 @@ import { toggleChapterProgressAction, setPreferredTranslationAction } from "@/fe
 import { ChapterContextCard } from "@/features/reading/chapter-context-card";
 import { getChapterPageData } from "@/features/reading/queries";
 import { TranslationPicker } from "@/features/reading/translation-picker";
-import { VerseSelector } from "@/features/reading/verse-selector";
+import { VerseReadingClient } from "@/features/reading/verse-reading-client";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +101,7 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
 
       <ChapterContextCard context={chapterData.chapterContext} />
 
-      <VerseSelector
+      <VerseReadingClient
         bookName={chapterData.book.name}
         chapterNumber={chapterData.chapter.chapterNumber}
         redirectPath={redirectPath}

@@ -3,13 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import { updateVerseSelectionAction } from "@/features/highlights/actions";
 
-type Verse = {
+export type Verse = {
   id: number;
   verseNumber: number;
   text: string;
 };
 
-type VerseSelectorProps = {
+export type VerseSelectorProps = {
   bookName: string;
   chapterNumber: number;
   redirectPath: string;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { cookies } from "next/headers";
 import { getStoredUserPreferences } from "@/features/account/preferences";
 import { db } from "@/lib/db/knex";
@@ -14,24 +15,28 @@ export type ActiveTranslation = {
   name: string;
 };
 
-export const getActiveTranslations = cache(async function getActiveTranslations(): Promise<ActiveTranslation[]> {
-  const rows = await db("translations")
-    .select("id", "code", "name")
-    .where({ is_active: true })
-    .orderBy("name", "asc");
+export const getActiveTranslations = unstable_cache(
+  async function getActiveTranslations(): Promise<ActiveTranslation[]> {
+    const rows = await db("translations")
+      .select("id", "code", "name")
+      .where({ is_active: true })
+      .orderBy("name", "asc");
 
-  const translations = rows.map((row) => ({
-    id: Number(row.id),
-    code: String(row.code),
-    name: String(row.name),
-  }));
+    const translations = rows.map((row) => ({
+      id: Number(row.id),
+      code: String(row.code),
+      name: String(row.name),
+    }));
 
-  return translations.sort((left, right) => {
-    if (left.code === env.DEFAULT_TRANSLATION_CODE) return -1;
-    if (right.code === env.DEFAULT_TRANSLATION_CODE) return 1;
-    return left.name.localeCompare(right.name, "pt-BR");
-  });
-});
+    return translations.sort((left, right) => {
+      if (left.code === env.DEFAULT_TRANSLATION_CODE) return -1;
+      if (right.code === env.DEFAULT_TRANSLATION_CODE) return 1;
+      return left.name.localeCompare(right.name, "pt-BR");
+    });
+  },
+  ["reading-active-translations"],
+  { revalidate: 60 * 60 },
+);
 
 export const resolvePreferredTranslation = cache(async function resolvePreferredTranslation(
   userId?: string | null,
